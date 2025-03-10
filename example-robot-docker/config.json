@@ -1,0 +1,7 @@
+{
+  "global": {
+    "rosReleases": ["foxy"],
+    "noRosCore": true,
+    "desiredPackages": ["@transitive-robotics/webrtc-video"]
+  }
+}
