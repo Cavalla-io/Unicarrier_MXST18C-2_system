@@ -22,7 +22,7 @@ This repository contains an automated system to initialize your robot on startup
 The automation follows this sequence:
 1. The system boots up
 2. The systemd service (`robot_startup.service`) starts automatically
-3. The service runs `startup_script.sh`
+3. The service runs `start_robot.py`
 4. The script executes the camera initialization script (`uvc_rgb.py`)
 5. The script waits for the camera device (`/dev/video0`) to become available
 6. Once the camera is ready, the script runs `run.sh` in the docker directory
@@ -34,7 +34,7 @@ To install the automation, follow these steps:
 
 1. Ensure the startup script is executable:
    ```bash
-   chmod +x /home/ubuntu/launch_robot/startup_script.sh
+   chmod +x /home/ubuntu/launch_robot/start_robot.py
    ```
 
 2. Copy the systemd service file to the system directory:
