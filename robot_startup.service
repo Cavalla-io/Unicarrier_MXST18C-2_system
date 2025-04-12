@@ -4,7 +4,7 @@ After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /home/ubuntu/launch_robot/start_robot.py
+ExecStart=/usr/bin/python3 /home/ubuntu/Unicarrier_MXST18C-2_system/start_robot.py
 Restart=on-failure
 RestartSec=5s
 User=ubuntu
