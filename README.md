@@ -102,3 +102,33 @@ If you need to modify the startup behavior:
    ```bash
    sudo systemctl restart robot_startup.service
    ``` 
+
+## Adding to a New System
+
+To implement this automation on a new system, follow these steps:
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/Unicarrier_MXST18C-2_system.git
+   cd Unicarrier_MXST18C-2_system
+   ```
+
+2. Update the robot name in the `example-robot-docker/run.sh` file:
+   ```bash
+   # Open the file in your preferred editor
+   nano example-robot-docker/run.sh
+   
+   # Change the TAGNAME variable to match your robot's identifier
+   # Look for this line and modify it:
+   TAGNAME=cavalla_001
+   ```
+
+3. Run the setup script and wait for the build to complete:
+   ```bash
+   cd example-robot-docker
+   ./run.sh
+   ```
+   
+   This will build the Docker container with your custom configuration and launch the robot system.
+
+4. Follow the installation instructions in the "Installation" section above to set up the systemd service for automatic startup. 

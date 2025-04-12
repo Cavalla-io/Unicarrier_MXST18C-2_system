@@ -13,7 +13,7 @@ if [[ "$1" == "--detached" ]]; then
 fi
 
 BUILDARGS=""
-TAGNAME=robot
+TAGNAME=cavalla_001
 if [[ $# > 0 ]]; then
   TAGNAME+=_${1/:/-}
   BUILDARGS+="--build-arg BASE_IMAGE=$1"
@@ -37,7 +37,7 @@ if [ "$INTERACTIVE" = true ]; then
   echo "Starting Docker container in interactive mode"
   docker run -it --rm \
   --privileged \
-  --hostname robot_$TAGNAME_$NUMBER \
+  --hostname robot_${TAGNAME}_${NUMBER} \
   -v $DIR:/root/.transitive \
   -v /run/udev:/run/udev \
   --device=/dev/video0 \
@@ -51,7 +51,7 @@ else
   echo "Starting Docker container in detached mode"
   docker run -d --rm \
   --privileged \
-  --hostname robot_$TAGNAME_$NUMBER \
+  --hostname robot_${TAGNAME}_${NUMBER} \
   -v $DIR:/root/.transitive \
   -v /run/udev:/run/udev \
   --device=/dev/video0 \
