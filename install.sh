@@ -59,21 +59,16 @@ source /opt/ros/humble/setup.bash
 echo "ROS2 Humble installation and environment setup completed."
 echo
 
-# Create required directories if they don't exist
-LAUNCH_ROBOT_DIR="$USER_HOME/launch_robot"
-mkdir -p "$LAUNCH_ROBOT_DIR/example-robot-docker"
-echo "Created directory structure at $LAUNCH_ROBOT_DIR"
-
-# Copy start_robot.py to the correct location
-echo "Copying start_robot.py to $LAUNCH_ROBOT_DIR..."
-cp start_robot.py "$LAUNCH_ROBOT_DIR/"
+# Define path to repository
+REPO_DIR="$PWD"
+echo "Using repository directory: $REPO_DIR"
 
 # Robot Startup Automation installation
 echo "Starting installation of Robot Startup Automation..."
 
 # Step 1: Make startup script executable
 echo "Making startup script executable..."
-chmod +x "$LAUNCH_ROBOT_DIR/start_robot.py"
+chmod +x "$REPO_DIR/start_robot.py"
 
 # Step 2: Create and populate systemd service file
 echo "Creating systemd service file..."
@@ -83,7 +78,7 @@ Description=Robot Startup Automation
 After=network.target
 
 [Service]
-ExecStart=$LAUNCH_ROBOT_DIR/start_robot.py
+ExecStart=$REPO_DIR/start_robot.py
 User=$(whoami)
 Restart=on-failure
 RestartSec=5
