@@ -13,8 +13,11 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 
 def main():
+    # Get the directory where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
     # Paths to scripts
-    docker_dir = "/home/ubuntu/launch_robot/example-robot-docker"
+    docker_dir = os.path.join(script_dir, "example-robot-docker")
     run_sh_path = os.path.join(docker_dir, "run.sh")
     
     # Check if files exist
