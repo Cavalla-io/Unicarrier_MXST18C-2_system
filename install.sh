@@ -75,6 +75,44 @@ else
   which colcon &> /dev/null || sudo apt install -y python3-colcon-common-extensions
 fi
 
+# Install dependencies required by Unicarrier_MXST18C-2 project
+echo "Installing dependencies for Unicarrier_MXST18C-2..."
+
+# Install CAN utilities if needed
+echo "Installing CAN utilities..."
+sudo apt-get update && sudo apt-get install -y can-utils
+
+# Install Python dependencies
+echo "Installing Python dependencies..."
+sudo apt-get install -y python3-pip
+# Install Python packages for the real user (not just in sudo's environment)
+if [ "$SUDO_USER" ]; then
+  echo "Installing Python packages for user $REAL_USER..."
+  sudo -H -u $REAL_USER pip3 install --user pyserial python-can
+else
+  # Regular user running the script
+  pip3 install --user pyserial python-can
+fi
+
+# Install ROS2 specific dependencies
+echo "Installing ROS2 specific dependencies..."
+sudo apt-get install -y \
+  ros-humble-cv-bridge \
+  ros-humble-image-transport \
+  ros-humble-image-transport-plugins \
+  ros-humble-image-pipeline
+
+# Install Depthai dependencies for the camera pipeline
+echo "Installing Depthai dependencies..."
+sudo apt-get install -y \
+  ros-humble-camera-calibration \
+  ros-humble-vision-msgs
+
+# Try to install depthai packages from apt if available
+sudo apt-get install -y ros-humble-depthai ros-humble-depthai-bridge ros-humble-depthai-descriptions ros-humble-depthai-ros-msgs || {
+  echo "Depthai packages not found in apt, they may need to be installed from source"
+}
+
 # Setup ROS2 environment in the real user's .bashrc
 echo "Setting up ROS2 environment in $REAL_USER's .bashrc..."
 BASHRC_FILE="$REAL_HOME/.bashrc"
@@ -174,6 +212,14 @@ else
   echo "Adding user $REAL_USER to the docker group..."
   sudo usermod -aG docker $REAL_USER
   echo "You'll need to log out and back in for Docker permissions to take effect"
+fi
+
+# Setup CAN bus permissions and configuration
+echo "Setting up CAN bus permissions and configuration..."
+if [ -f "$REPO_DIR/setup_network_privileges.sh" ]; then
+  sudo bash "$REPO_DIR/setup_network_privileges.sh" "$REAL_USER"
+else
+  echo "Warning: setup_network_privileges.sh not found. CAN bus permissions not configured."
 fi
 
 echo "Installation completed successfully!"
