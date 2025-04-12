@@ -2,6 +2,48 @@
 
 This repository contains an automated system to initialize your robot on startup. The automation handles launching the robot's Docker container for running ROS2 applications.
 
+## Installation
+
+The simplest way to install is to use the provided installation script:
+
+```bash
+# Clone the repository
+git clone https://github.com/Cavalla-io/Unicarrier_MXST18C-2_system.git
+cd Unicarrier_MXST18C-2_system
+```
+
+If installing on a new system, you may need to update the robot name:
+```bash
+# Open the run.sh file in your preferred editor
+nano example-robot-docker/run.sh
+
+# Change the TAGNAME variable to match your robot's identifier
+# Look for this line and modify it:
+TAGNAME=cavalla_001
+```
+
+Then run the installation script:
+```bash
+# Make the installation script executable
+chmod +x install.sh
+
+# Run the installation script
+./install.sh
+```
+
+The installation script will:
+1. Install ROS2 Humble if not already installed
+2. Configure ROS2 environment in your .bashrc
+3. Set up the startup script
+4. Create and enable the systemd service
+5. Add your user to the docker group if needed
+
+After installation, verify that everything was set up correctly:
+
+```bash
+./verify_installation.sh
+```
+
 ## System Overview
 
 ### Components
@@ -30,35 +72,6 @@ The automation follows this sequence:
 3. The service runs `start_robot.py`
 4. The script runs `run.sh` in the docker directory
 5. The Docker container starts, and the robot is operational
-
-## Installation
-
-The simplest way to install is to use the provided installation script:
-
-```bash
-# Clone the repository
-git clone https://github.com/Cavalla-io/Unicarrier_MXST18C-2_system.git
-cd Unicarrier_MXST18C-2_system
-
-# Make the installation script executable
-chmod +x install.sh
-
-# Run the installation script
-./install.sh
-```
-
-The installation script will:
-1. Install ROS2 Humble if not already installed
-2. Configure ROS2 environment in your .bashrc
-3. Set up the startup script
-4. Create and enable the systemd service
-5. Add your user to the docker group if needed
-
-After installation, verify that everything was set up correctly:
-
-```bash
-./verify_installation.sh
-```
 
 ## Manual Installation
 
@@ -161,34 +174,38 @@ If you need to modify the startup behavior:
    sudo systemctl restart robot_startup.service
    ```
 
-## Adding to a New System
+## Dependencies
 
-To implement this automation on a new system, follow these steps:
+This project depends on the following software components:
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/Unicarrier_MXST18C-2_system.git
-   cd Unicarrier_MXST18C-2_system
-   ```
+### System Dependencies
+- **Ubuntu 22.04** (or compatible Linux distribution)
+- **Docker**: For running the robot container
+- **CAN Utilities**: `can-utils` package for CAN bus communication
 
-2. Update the robot name in the `example-robot-docker/run.sh` file:
-   ```bash
-   # Open the file in your preferred editor
-   nano example-robot-docker/run.sh
-   
-   # Change the TAGNAME variable to match your robot's identifier
-   # Look for this line and modify it:
-   TAGNAME=cavalla_001
-   ```
+### ROS2 Dependencies
+- **ROS2 Humble**: Base ROS2 distribution
+- **ROS2 Development Tools**:
+  - `python3-rosdep`: For managing dependencies
+  - `python3-colcon-common-extensions`: For building workspaces
 
-3. Run the installation script:
-   ```bash
-   ./install.sh
-   ```
-   
-   This will install all necessary components and configure the system to start the robot automatically on boot.
+### Python Dependencies
+- **PySerial**: For serial communication
+- **Python-CAN**: For CAN bus interface
 
-4. Verify the installation:
-   ```bash
-   ./verify_installation.sh
-   ``` 
+### ROS2 Packages
+- **cv_bridge**: For converting between ROS and OpenCV images
+- **image_transport**: For efficient image transmission
+- **image_transport_plugins**: For additional image encoding options
+- **image_pipeline**: For image processing utilities
+- **camera_calibration**: For calibrating cameras
+- **vision_msgs**: For vision-related message types
+
+### Camera Dependencies
+- **Depthai**: For OAK-D camera support
+  - `depthai`: Base library
+  - `depthai_bridge`: For ROS2 integration
+  - `depthai_descriptions`: For camera models
+  - `depthai_ros_msgs`: For camera-specific message types
+
+All of these dependencies are automatically installed by the `install.sh` script and can be verified using the `verify_installation.sh` script. 
