@@ -2,6 +2,6 @@
   "global": {
     "rosReleases": ["foxy"],
     "noRosCore": true,
-    "desiredPackages": ["@transitive-robotics/webrtc-video"]
+    "desiredPackages": ["@transitive-robotics/webrtc-video", "@transitive-robotics/ros-tool", "@transitive-robotics/remote-teleop"]
   }
 }
