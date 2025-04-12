@@ -34,12 +34,12 @@ To install the automation, follow these steps:
 
 1. Ensure the startup script is executable:
    ```bash
-   chmod +x /home/ubuntu/launch_robot/start_robot.py
+   chmod +x /home/ubuntu/Unicarrier_MXST18C-2_system/start_robot.py
    ```
 
 2. Copy the systemd service file to the system directory:
    ```bash
-   sudo cp /home/ubuntu/launch_robot/robot_startup.service /etc/systemd/system/
+   sudo cp /home/ubuntu/Unicarrier_MXST18C-2_system/robot_startup.service /etc/systemd/system/
    ```
 
 3. Reload the systemd daemon:
