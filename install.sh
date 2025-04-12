@@ -222,6 +222,36 @@ else
   echo "Warning: setup_network_privileges.sh not found. CAN bus permissions not configured."
 fi
 
+# Explicitly enable and start CAN services
+echo "Ensuring CAN services are enabled and started..."
+if systemctl list-unit-files | grep -q "can-setup.service"; then
+  echo "Enabling can-setup.service..."
+  sudo systemctl enable can-setup.service
+  echo "Starting can-setup.service..."
+  sudo systemctl start can-setup.service || echo "Warning: Failed to start can-setup.service"
+else
+  echo "Warning: can-setup.service not found. It should be created by setup_network_privileges.sh."
+fi
+
+if systemctl list-unit-files | grep -q "can-permissions.service"; then
+  echo "Enabling can-permissions.service..."
+  sudo systemctl enable can-permissions.service
+  echo "Starting can-permissions.service..."
+  sudo systemctl start can-permissions.service || echo "Warning: Failed to start can-permissions.service"
+else
+  echo "Warning: can-permissions.service not found. It should be created by setup_network_privileges.sh."
+fi
+
+# Initialize CAN interface using can_tools.sh if available
+if [ -f "$REPO_DIR/can_tools.sh" ]; then
+  echo "Making can_tools.sh executable..."
+  chmod +x "$REPO_DIR/can_tools.sh"
+  echo "Starting CAN interface using can_tools.sh..."
+  "$REPO_DIR/can_tools.sh" start || echo "Warning: Failed to start CAN interface with can_tools.sh"
+else
+  echo "Warning: can_tools.sh not found. Cannot initialize CAN interface."
+fi
+
 echo "Installation completed successfully!"
 echo "The robot startup service will run automatically on next boot."
 echo "To start it now without rebooting, run: sudo systemctl start robot_startup.service"
