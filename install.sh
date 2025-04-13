@@ -224,6 +224,24 @@ else
   echo "You'll need to log out and back in for serial port permissions to take effect"
 fi
 
+# Step 6: Setup sudo permissions for udev operations
+echo "Setting up passwordless sudo for udev operations..."
+UDEV_SUDOERS="/etc/sudoers.d/udev-permissions"
+if [ -f "$UDEV_SUDOERS" ]; then
+  echo "Udev sudo permissions file already exists. Checking content..."
+  if grep -q "$REAL_USER" "$UDEV_SUDOERS"; then
+    echo "Sudo permissions for udev already configured for $REAL_USER."
+  else
+    echo "Adding $REAL_USER to existing udev sudo permissions file..."
+    echo "$REAL_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/udev-*.rules /etc/udev/rules.d/, /bin/systemctl reload udev, /bin/udevadm control --reload-rules, /bin/udevadm trigger" | sudo tee -a "$UDEV_SUDOERS" > /dev/null
+  fi
+else
+  echo "Creating udev sudo permissions file..."
+  echo "$REAL_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/udev-*.rules /etc/udev/rules.d/, /bin/systemctl reload udev, /bin/udevadm control --reload-rules, /bin/udevadm trigger" | sudo tee "$UDEV_SUDOERS" > /dev/null
+  # Ensure correct permissions on the file
+  sudo chmod 440 "$UDEV_SUDOERS"
+fi
+
 # Setup CAN bus permissions and configuration
 echo "Setting up CAN bus permissions and configuration..."
 if [ -f "$REPO_DIR/setup_network_privileges.sh" ]; then

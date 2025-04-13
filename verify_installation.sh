@@ -308,6 +308,38 @@ else
   ((WARN_COUNT++))
 fi
 
+# Check serial port permissions for user
+echo -e "\n== Checking Serial Port Permissions =="
+if id -nG | grep -qw "dialout"; then
+  echo -e "$CHECK_MARK Current user is in the dialout group for serial port access"
+  ((PASS_COUNT++))
+else
+  echo -e "$CROSS_MARK Current user is NOT in the dialout group, may not be able to access serial ports"
+  echo "   Run: sudo usermod -aG dialout $(whoami)"
+  echo "   Then log out and back in for changes to take effect"
+  ((ERROR_COUNT++))
+fi
+
+# Check udev sudo permissions
+echo -e "\n== Checking Udev Sudo Permissions =="
+UDEV_SUDOERS="/etc/sudoers.d/udev-permissions"
+CURRENT_USER=$(whoami)
+
+if [ -f "$UDEV_SUDOERS" ]; then
+  if sudo grep -q "$CURRENT_USER" "$UDEV_SUDOERS" 2>/dev/null; then
+    echo -e "$CHECK_MARK User has passwordless sudo permissions for udev operations"
+    ((PASS_COUNT++))
+  else
+    echo -e "$CROSS_MARK Udev sudo permissions file exists but does not include current user"
+    echo "   Run: sudo bash -c \"echo '$CURRENT_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/udev-*.rules /etc/udev/rules.d/, /bin/systemctl reload udev, /bin/udevadm control --reload-rules, /bin/udevadm trigger' > $UDEV_SUDOERS && chmod 440 $UDEV_SUDOERS\""
+    ((ERROR_COUNT++))
+  fi
+else
+  echo -e "$CROSS_MARK Udev sudo permissions file does not exist"
+  echo "   Run: sudo bash -c \"echo '$CURRENT_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/udev-*.rules /etc/udev/rules.d/, /bin/systemctl reload udev, /bin/udevadm control --reload-rules, /bin/udevadm trigger' > $UDEV_SUDOERS && chmod 440 $UDEV_SUDOERS\""
+  ((ERROR_COUNT++))
+fi
+
 # Check network privileges for user
 echo -e "\n== Checking Network Privileges =="
 if id -nG | grep -qw "netdev"; then
