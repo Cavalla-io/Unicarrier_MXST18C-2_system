@@ -325,18 +325,26 @@ echo -e "\n== Checking Udev Sudo Permissions =="
 UDEV_SUDOERS="/etc/sudoers.d/udev-permissions"
 CURRENT_USER=$(whoami)
 
-if [ -f "$UDEV_SUDOERS" ]; then
-  if sudo grep -q "$CURRENT_USER" "$UDEV_SUDOERS" 2>/dev/null; then
+# Test passwordless sudo by using sudo -n which fails if it would prompt for password
+if sudo -n true 2>/dev/null; then
+  # Now test specific command that should be allowed
+  if sudo -n /bin/udevadm control --reload-rules 2>/dev/null; then
     echo -e "$CHECK_MARK User has passwordless sudo permissions for udev operations"
     ((PASS_COUNT++))
   else
-    echo -e "$CROSS_MARK Udev sudo permissions file exists but does not include current user"
-    echo "   Run: sudo bash -c \"echo '$CURRENT_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/udev-*.rules /etc/udev/rules.d/, /bin/systemctl reload udev, /bin/udevadm control --reload-rules, /bin/udevadm trigger' > $UDEV_SUDOERS && chmod 440 $UDEV_SUDOERS\""
+    echo -e "$CROSS_MARK User has passwordless sudo but not for required udev commands"
+    echo "   Run: sudo bash -c \"echo '$CURRENT_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/udev-*.rules /etc/udev/rules.d/, /bin/mv /tmp/udev-temp-*.rules /etc/udev/rules.d/, /bin/systemctl reload udev, /bin/udevadm control --reload-rules, /bin/udevadm trigger' > $UDEV_SUDOERS && chmod 440 $UDEV_SUDOERS\""
     ((ERROR_COUNT++))
   fi
 else
-  echo -e "$CROSS_MARK Udev sudo permissions file does not exist"
-  echo "   Run: sudo bash -c \"echo '$CURRENT_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/udev-*.rules /etc/udev/rules.d/, /bin/systemctl reload udev, /bin/udevadm control --reload-rules, /bin/udevadm trigger' > $UDEV_SUDOERS && chmod 440 $UDEV_SUDOERS\""
+  echo -e "$CROSS_MARK User does NOT have passwordless sudo permissions"
+  if [ -f "$UDEV_SUDOERS" ]; then
+    echo -e "  Permissions file exists but might not be properly configured"
+  else
+    echo -e "  Permissions file does not exist"
+  fi
+  echo "   Run: sudo bash -c \"echo '$CURRENT_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/udev-*.rules /etc/udev/rules.d/, /bin/mv /tmp/udev-temp-*.rules /etc/udev/rules.d/, /bin/systemctl reload udev, /bin/udevadm control --reload-rules, /bin/udevadm trigger' > $UDEV_SUDOERS && chmod 440 $UDEV_SUDOERS\""
+  echo "   Then log out and back in for changes to take effect"
   ((ERROR_COUNT++))
 fi
 
