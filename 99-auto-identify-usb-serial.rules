@@ -1,0 +1,12 @@
+# Run identification script when a USB serial device is added (with a delay)
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ACTION=="add", RUN+="/bin/bash -c 'sleep 3 && /home/cavalla/Unicarrier_MXST18C-2_system/identify_serial_devices.py'"
+
+# Also clean up rules when a device is removed
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ACTION=="remove", RUN+="/bin/bash -c 'for f in /etc/udev/rules.d/99-*-$(echo %k | sed \"s/ttyUSB//\").rules; do if [ -f \"$f\" ]; then sudo rm \"$f\"; fi; done && sudo udevadm control --reload-rules'"
+
+# Create a persistent rule to ensure symlinks persist
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ACTION=="add", PROGRAM+="/bin/bash -c 'if grep -q \"SYMLINK+=\\"steering\\"\" /etc/udev/rules.d/99-steering.rules 2>/dev/null && grep -q \"$(basename $(dirname $(readlink -f /sys$DEVPATH)))\" /etc/udev/rules.d/99-steering.rules; then echo steering; fi'"
+RESULT=="steering", SYMLINK+="steering"
+
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ACTION=="add", PROGRAM+="/bin/bash -c 'if grep -q \"SYMLINK+=\\"throttle\\"\" /etc/udev/rules.d/99-throttle.rules 2>/dev/null && grep -q \"$(basename $(dirname $(readlink -f /sys$DEVPATH)))\" /etc/udev/rules.d/99-throttle.rules; then echo throttle; fi'"
+RESULT=="throttle", SYMLINK+="throttle"

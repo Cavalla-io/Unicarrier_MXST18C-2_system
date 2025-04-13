@@ -192,7 +192,7 @@ def identify_device(device_path, baud_rates):
     """Attempt to identify a device with retry logic for valid device names."""
     print(f"Communicating with {device_path}...")
     
-    max_attempts = 10
+    max_attempts = 30
     
     for baud_rate in baud_rates:
         print(f"  Trying baud rate: {baud_rate}...")
@@ -281,6 +281,9 @@ def main():
     
     print(f"Found {len(devices)} USB serial devices.")
     
+    # First, check for devices that are no longer present and remove their rules
+    clean_old_rules(devices)
+    
     device_info = {}
     
     # Define common baud rates to try if the default doesn't work
@@ -302,6 +305,34 @@ def main():
             
         port_path = get_port_path(device_path)
         create_udev_rule(device_name, port_path)
+
+def clean_old_rules(current_devices):
+    """Remove udev rules for devices that are no longer present."""
+    print("Checking for stale device rules...")
+    
+    # Get the device numbers for current devices
+    current_device_nums = set()
+    for device in current_devices:
+        match = re.search(r'ttyUSB(\d+)', device)
+        if match:
+            current_device_nums.add(match.group(1))
+    
+    print(f"Current device numbers: {current_device_nums}")
+    
+    # Check all existing device rule files
+    rule_files = glob.glob('/etc/udev/rules.d/99-*.rules')
+    for rule_file in rule_files:
+        # Check if this is a rule for a USB device
+        tty_match = re.search(r'ttyUSB(\d+)', open(rule_file, 'r').read())
+        if tty_match:
+            dev_num = tty_match.group(1)
+            # If this device number is not in our current list, remove the rule
+            if dev_num not in current_device_nums:
+                print(f"Removing stale rule file for ttyUSB{dev_num}: {rule_file}")
+                try:
+                    subprocess.run(['sudo', 'rm', rule_file])
+                except Exception as e:
+                    print(f"Error removing rule file: {e}")
 
 if __name__ == "__main__":
     main() 

@@ -1,0 +1,19 @@
+[Unit]
+Description=Identify Serial Devices
+After=systemd-udev-settle.service dev-ttyUSB0.device
+Wants=systemd-udev-settle.service
+Requires=systemd-udevd.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 10
+ExecStart=/home/cavalla/Unicarrier_MXST18C-2_system/identify_serial_devices.py
+ExecStartPost=/bin/bash -c 'ls -la /dev/throttle /dev/steering || true'
+User=cavalla
+RemainAfterExit=yes
+TimeoutSec=120
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

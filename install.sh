@@ -286,15 +286,20 @@ if [ -f "$REPO_DIR/identify_serial_devices.py" ]; then
   cat > "$REPO_DIR/auto_identify_serial.service" << EOL
 [Unit]
 Description=Identify Serial Devices
-After=systemd-udev-settle.service
+After=systemd-udev-settle.service dev-ttyUSB0.device
 Wants=systemd-udev-settle.service
+Requires=systemd-udevd.service
 
 [Service]
 Type=oneshot
+ExecStartPre=/bin/sleep 10
 ExecStart=$REPO_DIR/identify_serial_devices.py
+ExecStartPost=/bin/bash -c 'ls -la /dev/throttle /dev/steering || true'
 User=$REAL_USER
 RemainAfterExit=yes
 TimeoutSec=120
+Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
@@ -303,12 +308,58 @@ EOL
   # Create enhanced udev rule file for both add and remove actions
   echo "Creating enhanced udev rule for automatic identification on device connection/disconnection..."
   cat > "$REPO_DIR/99-auto-identify-usb-serial.rules" << EOL
-# Run identification script when a USB serial device is added
-SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ACTION=="add", RUN+="/bin/bash -c '$REPO_DIR/identify_serial_devices.py'"
+# Run identification script when a USB serial device is added (with a delay)
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ACTION=="add", RUN+="/bin/bash -c 'sleep 3 && $REPO_DIR/identify_serial_devices.py'"
 
 # Also clean up rules when a device is removed
 SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ACTION=="remove", RUN+="/bin/bash -c 'for f in /etc/udev/rules.d/99-*-\$(echo %k | sed \"s/ttyUSB//\").rules; do if [ -f \"\$f\" ]; then sudo rm \"\$f\"; fi; done && sudo udevadm control --reload-rules'"
+
+# Create a persistent rule to ensure symlinks persist
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ACTION=="add", PROGRAM+="/bin/bash -c 'if grep -q \"SYMLINK+=\\\"steering\\\"\" /etc/udev/rules.d/99-steering.rules 2>/dev/null && grep -q \"\$(basename \$(dirname \$(readlink -f /sys\$DEVPATH)))\" /etc/udev/rules.d/99-steering.rules; then echo steering; fi'"
+RESULT=="steering", SYMLINK+="steering"
+
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ACTION=="add", PROGRAM+="/bin/bash -c 'if grep -q \"SYMLINK+=\\\"throttle\\\"\" /etc/udev/rules.d/99-throttle.rules 2>/dev/null && grep -q \"\$(basename \$(dirname \$(readlink -f /sys\$DEVPATH)))\" /etc/udev/rules.d/99-throttle.rules; then echo throttle; fi'"
+RESULT=="throttle", SYMLINK+="throttle"
 EOL
+
+  # Create backup startup script
+  echo "Creating backup startup script for serial device identification..."
+  cat > "$REPO_DIR/startup_id_devices.sh" << EOL
+#!/bin/bash
+
+# This script runs at system startup to ensure all USB devices are properly identified
+# Add this to /etc/rc.local or run it from crontab with @reboot
+
+# Wait for USB devices to settle
+sleep 20
+
+# Check for existing USB devices
+for i in {0..10}; do
+  if [ -e "/dev/ttyUSB\$i" ]; then
+    echo "Found device at /dev/ttyUSB\$i"
+    
+    # Run the identification script
+    $REPO_DIR/identify_serial_devices.py
+    
+    # Verify symlinks exist
+    echo "Checking for symlinks..."
+    ls -la /dev/steering /dev/throttle || true
+    break
+  fi
+done
+
+# Force a udev trigger to ensure rules are applied
+sudo udevadm trigger
+
+# Final check after trigger
+echo "Final check for symlinks..."
+ls -la /dev/steering /dev/throttle || true
+
+exit 0
+EOL
+
+  # Make backup script executable
+  chmod +x "$REPO_DIR/startup_id_devices.sh"
 
   # Install systemd service with verification
   echo "Installing systemd service..."
@@ -318,6 +369,8 @@ EOL
   
   if sudo systemctl enable auto_identify_serial.service; then
     echo "Service auto_identify_serial.service enabled successfully"
+    sudo systemctl start auto_identify_serial.service
+    echo "Service auto_identify_serial.service started"
   else
     echo "Warning: Failed to enable auto_identify_serial.service"
   fi
@@ -329,40 +382,25 @@ EOL
   
   if sudo udevadm control --reload-rules; then
     echo "Udev rules reloaded successfully"
+    sudo udevadm trigger
+    echo "Udev rules triggered"
   else
     echo "Warning: Failed to reload udev rules"
   fi
   
-  # Test the sudo permissions to verify they work
-  echo "Testing sudo permissions..."
-  if sudo -n true 2>/dev/null; then
-    echo "Passwordless sudo confirmed working"
-    
-    # Test specific udev permissions
-    if sudo -n /bin/udevadm control --reload-rules 2>/dev/null; then
-      echo "Udev specific permissions confirmed working"
-    else
-      echo "Warning: Passwordless sudo works but udev permissions may not be configured correctly"
-      echo "Installing fallback sudo permissions..."
-      echo "$REAL_USER ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/emergency_fallback > /dev/null
-      sudo chmod 440 /etc/sudoers.d/emergency_fallback
-    fi
-  else
-    echo "Warning: Passwordless sudo not confirmed. Setting up emergency fallback..."
-    # Create emergency fallback sudo permissions if the normal ones aren't working
-    echo "$REAL_USER ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/emergency_fallback > /dev/null
-    sudo chmod 440 /etc/sudoers.d/emergency_fallback
-  fi
-  
-  # Run the identification script to set up initial device state
-  echo "Running initial identification..."
-  sudo -u $REAL_USER "$REPO_DIR/identify_serial_devices.py"
+  # Set up backup crontab job for the user
+  echo "Setting up backup crontab job..."
+  (crontab -l 2>/dev/null | grep -v "$REPO_DIR/startup_id_devices.sh"; echo "@reboot sleep 30 && $REPO_DIR/startup_id_devices.sh >> $REPO_DIR/startup_id_log.txt 2>&1") | crontab -
   
   # Create a systemd override to ensure the service runs on every boot
   sudo mkdir -p /etc/systemd/system/auto_identify_serial.service.d/
   echo "[Service]
 ExecStartPre=/bin/sleep 5" | sudo tee /etc/systemd/system/auto_identify_serial.service.d/override.conf > /dev/null
   sudo systemctl daemon-reload
+  
+  # Run the identification script to set up initial device state
+  echo "Running initial identification..."
+  sudo -u $REAL_USER "$REPO_DIR/identify_serial_devices.py"
   
   echo "Automatic identification of serial devices setup completed."
 else
