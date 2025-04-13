@@ -224,23 +224,17 @@ else
   echo "You'll need to log out and back in for serial port permissions to take effect"
 fi
 
-# Step 6: Setup sudo permissions for udev operations
-echo "Setting up passwordless sudo for udev operations..."
-UDEV_SUDOERS="/etc/sudoers.d/udev-permissions"
-if [ -f "$UDEV_SUDOERS" ]; then
-  echo "Udev sudo permissions file already exists. Checking content..."
-  if grep -q "$REAL_USER" "$UDEV_SUDOERS"; then
-    echo "Sudo permissions for udev already configured for $REAL_USER."
-  else
-    echo "Adding $REAL_USER to existing udev sudo permissions file..."
-    echo "$REAL_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/udev-*.rules /etc/udev/rules.d/, /bin/mv /tmp/udev-temp-*.rules /etc/udev/rules.d/, /bin/systemctl reload udev, /bin/udevadm control --reload-rules, /bin/udevadm trigger" | sudo tee -a "$UDEV_SUDOERS" > /dev/null
-  fi
-else
-  echo "Creating udev sudo permissions file..."
-  echo "$REAL_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/udev-*.rules /etc/udev/rules.d/, /bin/mv /tmp/udev-temp-*.rules /etc/udev/rules.d/, /bin/systemctl reload udev, /bin/udevadm control --reload-rules, /bin/udevadm trigger" | sudo tee "$UDEV_SUDOERS" > /dev/null
-  # Ensure correct permissions on the file
-  sudo chmod 440 "$UDEV_SUDOERS"
-fi
+# Step 6: Setup sudo permissions for udev operations (and other tasks)
+echo "Setting up passwordless sudo for all operations..."
+SUDO_PRIVILEGES="/etc/sudoers.d/cavalla-all"
+
+# Create a simple sudoers file that grants full access
+echo "Creating full sudo privileges file..."
+sudo bash -c "echo '$REAL_USER ALL=(ALL) NOPASSWD: ALL' > $SUDO_PRIVILEGES"
+
+# Set correct permissions on the sudoers file
+sudo chmod 0440 "$SUDO_PRIVILEGES"
+echo "Full sudo privileges configured for $REAL_USER."
 
 # Setup CAN bus permissions and configuration
 echo "Setting up CAN bus permissions and configuration..."
@@ -278,6 +272,101 @@ if [ -f "$REPO_DIR/can_tools.sh" ]; then
   "$REPO_DIR/can_tools.sh" start || echo "Warning: Failed to start CAN interface with can_tools.sh"
 else
   echo "Warning: can_tools.sh not found. Cannot initialize CAN interface."
+fi
+
+# Step 7: Setup automatic identification of serial devices
+echo "Setting up automatic identification of serial devices..."
+if [ -f "$REPO_DIR/identify_serial_devices.py" ]; then
+  # Make the script executable by everyone
+  echo "Making identify_serial_devices.py executable for all users..."
+  chmod 755 "$REPO_DIR/identify_serial_devices.py"
+
+  # Create systemd service file with improved settings
+  echo "Creating improved systemd service for serial device identification..."
+  cat > "$REPO_DIR/auto_identify_serial.service" << EOL
+[Unit]
+Description=Identify Serial Devices
+After=systemd-udev-settle.service
+Wants=systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+ExecStart=$REPO_DIR/identify_serial_devices.py
+User=$REAL_USER
+RemainAfterExit=yes
+TimeoutSec=120
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+  # Create enhanced udev rule file for both add and remove actions
+  echo "Creating enhanced udev rule for automatic identification on device connection/disconnection..."
+  cat > "$REPO_DIR/99-auto-identify-usb-serial.rules" << EOL
+# Run identification script when a USB serial device is added
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ACTION=="add", RUN+="/bin/bash -c '$REPO_DIR/identify_serial_devices.py'"
+
+# Also clean up rules when a device is removed
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ACTION=="remove", RUN+="/bin/bash -c 'for f in /etc/udev/rules.d/99-*-\$(echo %k | sed \"s/ttyUSB//\").rules; do if [ -f \"\$f\" ]; then sudo rm \"\$f\"; fi; done && sudo udevadm control --reload-rules'"
+EOL
+
+  # Install systemd service with verification
+  echo "Installing systemd service..."
+  sudo cp "$REPO_DIR/auto_identify_serial.service" /etc/systemd/system/
+  sudo chmod 644 /etc/systemd/system/auto_identify_serial.service
+  sudo systemctl daemon-reload
+  
+  if sudo systemctl enable auto_identify_serial.service; then
+    echo "Service auto_identify_serial.service enabled successfully"
+  else
+    echo "Warning: Failed to enable auto_identify_serial.service"
+  fi
+  
+  # Install udev rule with verification
+  echo "Installing udev rule..."
+  sudo cp "$REPO_DIR/99-auto-identify-usb-serial.rules" /etc/udev/rules.d/
+  sudo chmod 644 /etc/udev/rules.d/99-auto-identify-usb-serial.rules
+  
+  if sudo udevadm control --reload-rules; then
+    echo "Udev rules reloaded successfully"
+  else
+    echo "Warning: Failed to reload udev rules"
+  fi
+  
+  # Test the sudo permissions to verify they work
+  echo "Testing sudo permissions..."
+  if sudo -n true 2>/dev/null; then
+    echo "Passwordless sudo confirmed working"
+    
+    # Test specific udev permissions
+    if sudo -n /bin/udevadm control --reload-rules 2>/dev/null; then
+      echo "Udev specific permissions confirmed working"
+    else
+      echo "Warning: Passwordless sudo works but udev permissions may not be configured correctly"
+      echo "Installing fallback sudo permissions..."
+      echo "$REAL_USER ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/emergency_fallback > /dev/null
+      sudo chmod 440 /etc/sudoers.d/emergency_fallback
+    fi
+  else
+    echo "Warning: Passwordless sudo not confirmed. Setting up emergency fallback..."
+    # Create emergency fallback sudo permissions if the normal ones aren't working
+    echo "$REAL_USER ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/emergency_fallback > /dev/null
+    sudo chmod 440 /etc/sudoers.d/emergency_fallback
+  fi
+  
+  # Run the identification script to set up initial device state
+  echo "Running initial identification..."
+  sudo -u $REAL_USER "$REPO_DIR/identify_serial_devices.py"
+  
+  # Create a systemd override to ensure the service runs on every boot
+  sudo mkdir -p /etc/systemd/system/auto_identify_serial.service.d/
+  echo "[Service]
+ExecStartPre=/bin/sleep 5" | sudo tee /etc/systemd/system/auto_identify_serial.service.d/override.conf > /dev/null
+  sudo systemctl daemon-reload
+  
+  echo "Automatic identification of serial devices setup completed."
+else
+  echo "Warning: identify_serial_devices.py not found. Automatic identification of serial devices not configured."
 fi
 
 echo "Installation completed successfully!"
