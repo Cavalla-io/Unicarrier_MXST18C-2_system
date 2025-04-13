@@ -8,6 +8,9 @@ import os
 import re
 import binascii
 
+# List of valid device names
+VALID_DEVICE_NAMES = ["steering", "brake", "throttle"]
+
 def find_usb_serial_devices():
     """Find all USB serial devices."""
     return glob.glob('/dev/ttyUSB*')
@@ -185,6 +188,90 @@ def create_udev_rule(device_name, port_path):
         print(f"Failed to create udev rule for {device_name}")
         return False
 
+def identify_device(device_path, baud_rates):
+    """Attempt to identify a device with retry logic for valid device names."""
+    print(f"Communicating with {device_path}...")
+    
+    max_attempts = 10
+    
+    for baud_rate in baud_rates:
+        print(f"  Trying baud rate: {baud_rate}...")
+        
+        # Try up to max_attempts times to get a valid response
+        for attempt in range(1, max_attempts + 1):
+            try:
+                ser = serial.Serial(device_path, baud_rate, timeout=2)
+                
+                # Some devices need a moment to initialize after opening the port
+                time.sleep(0.5)
+                
+                # Flush any existing data
+                ser.reset_input_buffer()
+                
+                # Send the identify command
+                ser.write(b"i")
+                
+                # Wait for response - read raw bytes first
+                raw_response = ser.readline()
+                
+                if raw_response:
+                    # Try to decode as UTF-8, but handle errors
+                    try:
+                        response = raw_response.decode('utf-8').strip()
+                        print(f"  Attempt {attempt}: Device responded with: {response}")
+                        
+                        # Check if response is one of the valid device names
+                        if response.lower() in VALID_DEVICE_NAMES:
+                            print(f"  Valid device name received: {response}")
+                            ser.close()
+                            return response.lower()  # Return normalized lowercase name
+                        else:
+                            print(f"  Invalid device name. Expected one of {VALID_DEVICE_NAMES}")
+                            if attempt < max_attempts:
+                                print(f"  Retrying... ({attempt}/{max_attempts})")
+                                time.sleep(0.5)  # Wait before retrying
+                            else:
+                                print(f"  Max attempts reached. Using generic name.")
+                                ser.close()
+                                return f"unknown_device_at_{device_path.split('/')[-1]}"
+                    except UnicodeDecodeError:
+                        # If we can't decode as UTF-8, show the hex values
+                        hex_response = binascii.hexlify(raw_response).decode('ascii')
+                        print(f"  Attempt {attempt}: Device responded with binary data: {hex_response}")
+                        if attempt < max_attempts:
+                            print(f"  Retrying... ({attempt}/{max_attempts})")
+                            time.sleep(0.5)  # Wait before retrying
+                        else:
+                            print(f"  Max attempts reached. Using generic name.")
+                            ser.close()
+                            return f"unknown_device_at_{device_path.split('/')[-1]}"
+                else:
+                    print(f"  Attempt {attempt}: No response")
+                    if attempt < max_attempts:
+                        print(f"  Retrying... ({attempt}/{max_attempts})")
+                        time.sleep(0.5)  # Wait before retrying
+                    elif attempt == max_attempts:
+                        print(f"  No response after {max_attempts} attempts")
+                        break  # Try next baud rate
+                    
+            except Exception as e:
+                print(f"  Error: {e}")
+                try:
+                    ser.close()
+                except:
+                    pass
+                break  # Try next baud rate
+            
+            # Close the serial port before retrying
+            try:
+                ser.close()
+            except:
+                pass
+    
+    # If we get here, no valid response was received at any baud rate
+    print(f"No valid response from {device_path} after trying all baud rates")
+    return None
+
 def main():
     devices = find_usb_serial_devices()
     
@@ -201,54 +288,9 @@ def main():
     
     # Send identify message to each device and wait for response
     for device_path in devices:
-        print(f"Communicating with {device_path}...")
-        
-        # Try each baud rate
-        for baud_rate in baud_rates:
-            try:
-                print(f"  Trying baud rate: {baud_rate}...")
-                ser = serial.Serial(device_path, baud_rate, timeout=2)
-                
-                # Some devices need a moment to initialize after opening the port
-                time.sleep(0.5)
-                
-                # Flush any existing data
-                ser.reset_input_buffer()
-                
-                # Send just 'i' without newline
-                ser.write(b"i")
-                
-                # Wait for response - read raw bytes first
-                raw_response = ser.readline()
-                
-                if raw_response:
-                    # Try to decode as UTF-8, but handle errors
-                    try:
-                        response = raw_response.decode('utf-8').strip()
-                        print(f"  Device responded with text: {response}")
-                    except UnicodeDecodeError:
-                        # If we can't decode as UTF-8, show the hex values
-                        hex_response = binascii.hexlify(raw_response).decode('ascii')
-                        print(f"  Device responded with binary data: {hex_response}")
-                        response = f"device_at_{device_path.split('/')[-1]}"  # Generic name based on port
-                    
-                    device_info[device_path] = response
-                    ser.close()
-                    break  # Break the baud rate loop if we got a response
-                else:
-                    print(f"  No response at baud rate {baud_rate}")
-                    
-                ser.close()
-            except Exception as e:
-                print(f"  Error at baud rate {baud_rate}: {e}")
-                try:
-                    ser.close()
-                except:
-                    pass
-        
-        # If no response at any baud rate
-        if device_path not in device_info:
-            print(f"No valid response from {device_path} at any baud rate")
+        device_name = identify_device(device_path, baud_rates)
+        if device_name:
+            device_info[device_path] = device_name
     
     # Create udev rules for identified devices
     for device_path, device_name in device_info.items():
