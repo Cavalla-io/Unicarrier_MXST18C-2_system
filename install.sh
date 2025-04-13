@@ -233,11 +233,11 @@ if [ -f "$UDEV_SUDOERS" ]; then
     echo "Sudo permissions for udev already configured for $REAL_USER."
   else
     echo "Adding $REAL_USER to existing udev sudo permissions file..."
-    echo "$REAL_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/udev-*.rules /etc/udev/rules.d/, /bin/systemctl reload udev, /bin/udevadm control --reload-rules, /bin/udevadm trigger" | sudo tee -a "$UDEV_SUDOERS" > /dev/null
+    echo "$REAL_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/udev-*.rules /etc/udev/rules.d/, /bin/mv /tmp/udev-temp-*.rules /etc/udev/rules.d/, /bin/systemctl reload udev, /bin/udevadm control --reload-rules, /bin/udevadm trigger" | sudo tee -a "$UDEV_SUDOERS" > /dev/null
   fi
 else
   echo "Creating udev sudo permissions file..."
-  echo "$REAL_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/udev-*.rules /etc/udev/rules.d/, /bin/systemctl reload udev, /bin/udevadm control --reload-rules, /bin/udevadm trigger" | sudo tee "$UDEV_SUDOERS" > /dev/null
+  echo "$REAL_USER ALL=(ALL) NOPASSWD: /bin/mv /tmp/udev-*.rules /etc/udev/rules.d/, /bin/mv /tmp/udev-temp-*.rules /etc/udev/rules.d/, /bin/systemctl reload udev, /bin/udevadm control --reload-rules, /bin/udevadm trigger" | sudo tee "$UDEV_SUDOERS" > /dev/null
   # Ensure correct permissions on the file
   sudo chmod 440 "$UDEV_SUDOERS"
 fi
