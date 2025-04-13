@@ -322,45 +322,6 @@ SUBSYSTEM=="tty", KERNEL=="ttyUSB*", ACTION=="add", PROGRAM+="/bin/bash -c 'if g
 RESULT=="throttle", SYMLINK+="throttle"
 EOL
 
-  # Create backup startup script
-  echo "Creating backup startup script for serial device identification..."
-  cat > "$REPO_DIR/startup_id_devices.sh" << EOL
-#!/bin/bash
-
-# This script runs at system startup to ensure all USB devices are properly identified
-# Add this to /etc/rc.local or run it from crontab with @reboot
-
-# Wait for USB devices to settle
-sleep 20
-
-# Check for existing USB devices
-for i in {0..10}; do
-  if [ -e "/dev/ttyUSB\$i" ]; then
-    echo "Found device at /dev/ttyUSB\$i"
-    
-    # Run the identification script
-    $REPO_DIR/identify_serial_devices.py
-    
-    # Verify symlinks exist
-    echo "Checking for symlinks..."
-    ls -la /dev/steering /dev/throttle || true
-    break
-  fi
-done
-
-# Force a udev trigger to ensure rules are applied
-sudo udevadm trigger
-
-# Final check after trigger
-echo "Final check for symlinks..."
-ls -la /dev/steering /dev/throttle || true
-
-exit 0
-EOL
-
-  # Make backup script executable
-  chmod +x "$REPO_DIR/startup_id_devices.sh"
-
   # Install systemd service with verification
   echo "Installing systemd service..."
   sudo cp "$REPO_DIR/auto_identify_serial.service" /etc/systemd/system/
@@ -387,10 +348,6 @@ EOL
   else
     echo "Warning: Failed to reload udev rules"
   fi
-  
-  # Set up backup crontab job for the user
-  echo "Setting up backup crontab job..."
-  (crontab -l 2>/dev/null | grep -v "$REPO_DIR/startup_id_devices.sh"; echo "@reboot sleep 30 && $REPO_DIR/startup_id_devices.sh >> $REPO_DIR/startup_id_log.txt 2>&1") | crontab -
   
   # Create a systemd override to ensure the service runs on every boot
   sudo mkdir -p /etc/systemd/system/auto_identify_serial.service.d/
