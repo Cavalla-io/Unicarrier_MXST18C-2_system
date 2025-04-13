@@ -214,6 +214,16 @@ else
   echo "You'll need to log out and back in for Docker permissions to take effect"
 fi
 
+# Step 5: Setup serial port permissions for the user
+echo "Setting up serial port permissions..."
+if groups $REAL_USER | grep -q "dialout"; then
+  echo "User $REAL_USER is already in the dialout group."
+else
+  echo "Adding user $REAL_USER to the dialout group for serial port access..."
+  sudo usermod -aG dialout $REAL_USER
+  echo "You'll need to log out and back in for serial port permissions to take effect"
+fi
+
 # Setup CAN bus permissions and configuration
 echo "Setting up CAN bus permissions and configuration..."
 if [ -f "$REPO_DIR/setup_network_privileges.sh" ]; then
