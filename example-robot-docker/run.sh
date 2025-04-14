@@ -19,7 +19,7 @@ if [[ $# > 0 ]]; then
   BUILDARGS+="--build-arg BASE_IMAGE=$1"
 fi;
 
-# generate a random four-digit number
+# We still need the NUMBER for the temporary directory
 NUMBER=$(tr -dc 0-9 < /dev/urandom | fold -w 4 | head -n 1)
 
 . .env
@@ -37,7 +37,7 @@ if [ "$INTERACTIVE" = true ]; then
   echo "Starting Docker container in interactive mode"
   docker run -it --rm \
   --privileged \
-  --hostname robot_${TAGNAME}_${NUMBER} \
+  --hostname robot_${TAGNAME} \
   -v $DIR:/root/.transitive \
   -v /run/udev:/run/udev \
   --device=/dev/video0 \
@@ -51,7 +51,7 @@ else
   echo "Starting Docker container in detached mode"
   docker run -d --rm \
   --privileged \
-  --hostname robot_${TAGNAME}_${NUMBER} \
+  --hostname robot_${TAGNAME} \
   -v $DIR:/root/.transitive \
   -v /run/udev:/run/udev \
   --device=/dev/video0 \
