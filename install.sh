@@ -343,6 +343,76 @@ else
   echo "Warning: can_tools.sh not found. Cannot initialize CAN interface."
 fi
 
+# Setup Ethernet interface to use static IP 192.168.2.100
+echo "Checking Ethernet interface configuration..."
+ETHERNET_INTERFACE="eno1"
+TARGET_IP="192.168.2.100"
+CURRENT_IP=$(ip -4 addr show $ETHERNET_INTERFACE 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "")
+
+if [ "$CURRENT_IP" = "$TARGET_IP" ]; then
+  echo "Ethernet interface $ETHERNET_INTERFACE is already configured with IP $TARGET_IP"
+else
+  echo "Configuring Ethernet interface $ETHERNET_INTERFACE with static IP $TARGET_IP..."
+  
+  # Check if NetworkManager is being used
+  if command -v nmcli &> /dev/null; then
+    echo "Using NetworkManager to configure static IP..."
+    
+    # Check if a connection already exists for this interface
+    if nmcli -g NAME connection show | grep -q "^$ETHERNET_INTERFACE$"; then
+      echo "Modifying existing connection for $ETHERNET_INTERFACE..."
+      sudo nmcli connection modify "$ETHERNET_INTERFACE" ipv4.method manual ipv4.addresses "$TARGET_IP/24"
+      sudo nmcli connection down "$ETHERNET_INTERFACE" && sudo nmcli connection up "$ETHERNET_INTERFACE"
+    else
+      echo "Creating new connection for $ETHERNET_INTERFACE..."
+      sudo nmcli connection add type ethernet con-name "$ETHERNET_INTERFACE" ifname "$ETHERNET_INTERFACE" ipv4.method manual ipv4.addresses "$TARGET_IP/24"
+      sudo nmcli connection up "$ETHERNET_INTERFACE"
+    fi
+  else
+    # Fallback to traditional interfaces configuration file
+    echo "NetworkManager not found, using traditional interface configuration..."
+    
+    # Create netplan configuration for Ubuntu 18.04+
+    if [ -d "/etc/netplan" ]; then
+      echo "Creating netplan configuration..."
+      cat > /tmp/01-$ETHERNET_INTERFACE-static.yaml << EOL
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    $ETHERNET_INTERFACE:
+      dhcp4: no
+      addresses:
+        - $TARGET_IP/24
+EOL
+      sudo mv /tmp/01-$ETHERNET_INTERFACE-static.yaml /etc/netplan/
+      sudo netplan apply
+    else
+      # Older systems using /etc/network/interfaces
+      echo "Creating traditional interfaces configuration..."
+      echo "
+# Static IP configuration for $ETHERNET_INTERFACE
+auto $ETHERNET_INTERFACE
+iface $ETHERNET_INTERFACE inet static
+  address $TARGET_IP
+  netmask 255.255.255.0
+" | sudo tee -a /etc/network/interfaces > /dev/null
+      sudo ifdown $ETHERNET_INTERFACE || true
+      sudo ifup $ETHERNET_INTERFACE || true
+    fi
+  fi
+  
+  # Verify the configuration worked
+  NEW_IP=$(ip -4 addr show $ETHERNET_INTERFACE 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "")
+  if [ "$NEW_IP" = "$TARGET_IP" ]; then
+    echo "Successfully configured $ETHERNET_INTERFACE with IP $TARGET_IP"
+  else
+    echo "Warning: Failed to configure $ETHERNET_INTERFACE with IP $TARGET_IP"
+    echo "Current IP: $NEW_IP"
+    echo "You may need to manually configure the network settings"
+  fi
+fi
+
 # Step 7: Setup automatic identification of serial devices
 echo "Setting up automatic identification of serial devices..."
 if [ -f "$REPO_DIR/identify_serial_devices.py" ]; then
