@@ -78,6 +78,9 @@ fi
 # Install dependencies required by Unicarrier_MXST18C-2 project
 echo "Installing dependencies for Unicarrier_MXST18C-2..."
 
+# Define BASHRC_FILE early so it can be used throughout the script
+BASHRC_FILE="$REAL_HOME/.bashrc"
+
 # Install CAN utilities if needed
 echo "Installing CAN utilities..."
 sudo apt-get update && sudo apt-get install -y can-utils
@@ -108,14 +111,80 @@ sudo apt-get install -y \
   ros-humble-camera-calibration \
   ros-humble-vision-msgs
 
+# Install Luxonis official dependencies
+echo "Installing Luxonis official dependencies..."
+sudo wget -qO- https://docs.luxonis.com/install_dependencies.sh | bash
+
+# Add OpenBLAS environment variable to prevent illegal instruction on ARM
+echo "Setting up OpenBLAS environment for ARM processors..."
+if ! grep -q "export OPENBLAS_CORETYPE=ARMV8" "$BASHRC_FILE"; then
+  echo -e "\n# OpenBLAS configuration for ARM processors" >> "$BASHRC_FILE"
+  echo "export OPENBLAS_CORETYPE=ARMV8" >> "$BASHRC_FILE"
+  echo "Added OpenBLAS environment variable to $BASHRC_FILE"
+  # Fix file ownership if run with sudo
+  if [ "$SUDO_USER" ]; then
+    sudo chown $REAL_USER:$REAL_USER "$BASHRC_FILE"
+  fi
+  # Apply to current session
+  export OPENBLAS_CORETYPE=ARMV8
+else
+  echo "OpenBLAS environment already configured in $BASHRC_FILE"
+fi
+
 # Try to install depthai packages from apt if available
-sudo apt-get install -y ros-humble-depthai ros-humble-depthai-bridge ros-humble-depthai-descriptions ros-humble-depthai-ros-msgs || {
-  echo "Depthai packages not found in apt, they may need to be installed from source"
-}
+if apt-cache search ros-humble-depthai-ros-driver | grep -q ros-humble-depthai-ros-driver; then
+  echo "Installing Depthai ROS packages from apt..."
+  sudo apt-get install -y ros-humble-depthai ros-humble-depthai-bridge ros-humble-depthai-descriptions ros-humble-depthai-ros-msgs ros-humble-depthai-ros-driver
+else
+  echo "Depthai packages not found in apt, installing from source..."
+  
+  # Create ROS2 workspace if it doesn't exist
+  DEPTHAI_WS="$REAL_HOME/depthai_ws"
+  echo "Creating workspace at $DEPTHAI_WS"
+  mkdir -p "$DEPTHAI_WS/src"
+  
+  # Clone the depthai-ros repository
+  echo "Cloning depthai-ros repository..."
+  if [ -d "$DEPTHAI_WS/src/depthai-ros" ]; then
+    echo "depthai-ros repository already exists, updating..."
+    cd "$DEPTHAI_WS/src/depthai-ros"
+    git pull
+  else
+    cd "$DEPTHAI_WS/src"
+    git clone https://github.com/luxonis/depthai-ros.git -b humble
+  fi
+  
+  # Install dependencies
+  echo "Installing depthai dependencies..."
+  cd "$DEPTHAI_WS"
+  sudo apt-get update
+  rosdep update
+  rosdep install --from-paths src --ignore-src -r -y
+  
+  # Build the workspace
+  echo "Building depthai workspace..."
+  source /opt/ros/humble/setup.bash
+  cd "$DEPTHAI_WS"
+  if [ "$SUDO_USER" ]; then
+    sudo -H -u $REAL_USER bash -c "cd $DEPTHAI_WS && source /opt/ros/humble/setup.bash && colcon build --symlink-install"
+  else
+    colcon build --symlink-install
+  fi
+  
+  # Source the workspace in .bashrc if not already there
+  if ! grep -q "source $DEPTHAI_WS/install/setup.bash" "$BASHRC_FILE"; then
+    echo -e "\n# Source depthai workspace" >> "$BASHRC_FILE"
+    echo "source $DEPTHAI_WS/install/setup.bash" >> "$BASHRC_FILE"
+    echo "Added depthai workspace to $BASHRC_FILE"
+    # Fix file ownership if run with sudo
+    if [ "$SUDO_USER" ]; then
+      sudo chown $REAL_USER:$REAL_USER "$BASHRC_FILE"
+    fi
+  fi
+fi
 
 # Setup ROS2 environment in the real user's .bashrc
 echo "Setting up ROS2 environment in $REAL_USER's .bashrc..."
-BASHRC_FILE="$REAL_HOME/.bashrc"
 
 # Check if ROS2 sourcing is already in .bashrc to avoid duplication
 if ! grep -q "source /opt/ros/humble/setup.bash" "$BASHRC_FILE"; then
